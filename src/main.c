@@ -5,13 +5,13 @@
 #define MAXNAME 260
 #define MAXLINE 2048
 
-int getFileCount(void);
-char** getFileNames(int count);
-void createShaderHeader(int fileCount, char **files);
-void parseName(char name[], char output[], int size);
+int getFileCount(void); // returns the file count in the shaders folder
+char** getFileNames(int count); // returns an array of each file name
+void createShaderHeader(int fileCount, char **files); // creates the shader header file
+void parseName(char name[], char output[], int size); // turns a file name into a variable name ie compute.glsl -> compute
 
 int main() {
-    unsigned int fileCount = getFileCount();
+    int fileCount = getFileCount();
     if (fileCount == -1) {
         return 1;
     }
@@ -23,6 +23,12 @@ int main() {
 
     createShaderHeader(fileCount, files);
 
+    // cleanup memory
+    for (int i = 0; i < fileCount; i++) {
+        free(files[i]);
+    }
+    free(files);
+
     return 0;
 }
 
@@ -31,10 +37,10 @@ int getFileCount() {
     input = opendir("shaders/");
     if (!input) return -1; // if couldnt open dir return an error
 
-    unsigned int fileCount = 0;
+    int fileCount = 0;
     struct dirent *entry;
-    while((entry = readdir(input)) != NULL) {
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+    while((entry = readdir(input)) != NULL) { // keep reading filenames until none are left
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue; // ignore current dir and previous dir
         fileCount++;
     }
     closedir(input);
@@ -49,26 +55,25 @@ char** getFileNames(int count) {
     char** files = (char**)malloc(count * sizeof(char*));
 
     struct dirent *entry;
-    while((entry = readdir(input)) != NULL) {
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+    while((entry = readdir(input)) != NULL) { // keep reading file names until none are left
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue; // ignore current dir and previous dir
         files[filesCounted] = (char*)malloc(strlen(entry->d_name) + 1);
         strcpy(files[filesCounted], entry->d_name);
         filesCounted++;
     }
     closedir(input);
-
     return files;
 }
 
 void parseName(char name[], char output[], int size) {
-    for(int j = 0; name[j]; j++) {
-        output[j] = name[j];
-        if (output[j] == '.') {
-            output[j] = '\0';
+    for(int i = 0; name[i] && i < size-1; i++) { // go through each character of the name
+        output[i] = name[i];
+        if (output[i] == '.') { // null terminate after file extension
+            output[i] = '\0';
             break;
         }
     }
-    output[size-1] = '\0';
+    output[size-1] = '\0'; // null terminate at the end to avoid buffer overruns
 }
 
 void createShaderHeader(int fileCount, char **files) {
@@ -96,18 +101,9 @@ void createShaderHeader(int fileCount, char **files) {
             fputs(string, output);
         }
         fputs(")\";\n", output);
-
-        fclose(input);
-        
+        fclose(input);   
     }
-
     fputc('}', output); // close shader namespace
-
-    // cleanup memory
-    for (int i = 0; i < fileCount; i++) {
-        free(files[i]);
-    }
-    free(files);
 
     fflush(output);
     fclose(output);
