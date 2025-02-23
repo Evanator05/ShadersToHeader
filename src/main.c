@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "dirent.h"
+#include <dirent.h>
 
 #define MAXNAME 260
+#define MAXLINE 2048
 
 int getFileCount(void);
 char** getFileNames(int count);
@@ -41,14 +42,12 @@ int getFileCount() {
 }
 
 char** getFileNames(int count) {
-    DIR *input;
+    DIR *input = opendir("shaders/");
+    if (!input) return NULL; // if couldnt open dir return an error
+
     unsigned int filesCounted = 0;
     char** files = (char**)malloc(count * sizeof(char*));
 
-    input = opendir("shaders/");
-    if (!input) return NULL; // if couldnt open dir return an error
-
-    unsigned int fileCount = 0;
     struct dirent *entry;
     while((entry = readdir(input)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
@@ -62,14 +61,14 @@ char** getFileNames(int count) {
 }
 
 void parseName(char name[], char output[], int size) {
-    // create the variable name
     for(int j = 0; name[j]; j++) {
         output[j] = name[j];
         if (output[j] == '.') {
-            output[j] = 0;
+            output[j] = '\0';
             break;
         }
     }
+    output[size-1] = '\0';
 }
 
 void createShaderHeader(int fileCount, char **files) {
@@ -77,33 +76,32 @@ void createShaderHeader(int fileCount, char **files) {
 
     fprintf(output, "namespace Shaders {\n"); // open shader namespace
     for (int i = 0; i < fileCount; i++) { // add each file to the shader
-
-        // create the variable name
+        // pick the name of the header variable
         char name[MAXNAME];
         parseName(files[i], name, MAXNAME);
 
+        // print the start of the line -> const char* variable_name = R"(
         fprintf(output, "const char* ");
-        fprintf(output, name);
+        fprintf(output, "%s", name);
         fprintf(output, " = R\"(\n");
 
         // load file
-        char path[255];
-        sprintf(path, "shaders/%s", files[i]);
+        char path[MAXLINE+11];
+        snprintf(path, sizeof(path), "shaders/%s", files[i]);
         FILE *input = fopen(path, "r");
 
         // load string
-        size_t size = 5000;
-        char string[size];
-        while (fgets(string, size, input)) {
-            fprintf(output, string);
+        char string[MAXLINE];
+        while (fgets(string, MAXLINE, input)) { // print each line of the file
+            fputs(string, output);
         }
-        
-        fclose(input);
+        fputs(")\";\n", output);
 
-        fprintf(output, ")\";\n");
+        fclose(input);
+        
     }
 
-    fprintf(output, "}"); // close shader namespace
+    fputc('}', output); // close shader namespace
 
     // cleanup memory
     for (int i = 0; i < fileCount; i++) {
@@ -113,5 +111,4 @@ void createShaderHeader(int fileCount, char **files) {
 
     fflush(output);
     fclose(output);
-    free(output);
 }
